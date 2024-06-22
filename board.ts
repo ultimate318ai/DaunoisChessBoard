@@ -384,3 +384,215 @@ export function* scanReversed(bb: number): Generator<number, void, unknown> {
     bb ^= BB_SQUARES[r];
   }
 }
+
+export function flipVertical(bb: number): number {
+  // https://www.chessprogramming.org/Flipping_Mirroring_and_Rotating#FlipVertically
+  bb =
+    ((bb >> 8) & 0x00ff_00ff_00ff_00ff) | ((bb & 0x00ff_00ff_00ff_00ff) << 8);
+  bb =
+    ((bb >> 16) & 0x0000_ffff_0000_ffff) | ((bb & 0x0000_ffff_0000_ffff) << 16);
+  bb = (bb >> 32) | ((bb & 0x0000_0000_ffff_ffff) << 32);
+  return bb;
+}
+
+export function flip_horizontal(bb: number): number {
+  // https://www.chessprogramming.org/Flipping_Mirroring_and_Rotating#MirrorHorizontally
+  bb =
+    ((bb >> 1) & 0x5555_5555_5555_5555) | ((bb & 0x5555_5555_5555_5555) << 1);
+  bb =
+    ((bb >> 2) & 0x3333_3333_3333_3333) | ((bb & 0x3333_3333_3333_3333) << 2);
+  bb =
+    ((bb >> 4) & 0x0f0f_0f0f_0f0f_0f0f) | ((bb & 0x0f0f_0f0f_0f0f_0f0f) << 4);
+  return bb;
+}
+
+export function flip_diagonal(bb: number): number {
+  // https://www.chessprogramming.org/Flipping_Mirroring_and_Rotating#FlipabouttheDiagonal
+  let t = (bb ^ (bb << 28)) & 0x0f0f_0f0f_0000_0000;
+  bb = bb ^ t ^ (t >> 28);
+  t = (bb ^ (bb << 14)) & 0x3333_0000_3333_0000;
+  bb = bb ^ t ^ (t >> 14);
+  t = (bb ^ (bb << 7)) & 0x5500_5500_5500_5500;
+  bb = bb ^ t ^ (t >> 7);
+  return bb;
+}
+
+export function flip_anti_diagonal(bb: number): number {
+  // https://www.chessprogramming.org/Flipping_Mirroring_and_Rotating#FlipabouttheAntidiagonal
+  let t = bb ^ (bb << 36);
+  bb = bb ^ ((t ^ (bb >> 36)) & 0xf0f0_f0f0_0f0f_0f0f);
+  t = (bb ^ (bb << 18)) & 0xcccc_0000_cccc_0000;
+  bb = bb ^ t ^ (t >> 18);
+  t = (bb ^ (bb << 9)) & 0xaa00_aa00_aa00_aa00;
+  bb = bb ^ t ^ (t >> 9);
+  return bb;
+}
+
+export function shift_down(bb: number): number {
+  return bb >> 8;
+}
+
+export function shift_2_down(bb: number): number {
+  return bb >> 16;
+}
+
+export function shift_up(bb: number): number {
+  return (bb << 8) & BB_ALL;
+}
+
+export function shift_2_up(bb: number): number {
+  return (bb << 16) & BB_ALL;
+}
+
+export function shift_right(bb: number): number {
+  return (bb << 1) & ~BB_FILE_A & BB_ALL;
+}
+
+export function shift_2_right(bb: number): number {
+  return (bb << 2) & ~BB_FILE_A & ~BB_FILE_B & BB_ALL;
+}
+
+export function shift_left(bb: number): number {
+  return (bb >> 1) & ~BB_FILE_H;
+}
+
+export function shift_2_left(bb: number): number {
+  return (bb >> 2) & ~BB_FILE_G & ~BB_FILE_H;
+}
+
+export function shift_up_left(bb: number): number {
+  return (bb << 7) & ~BB_FILE_H & BB_ALL;
+}
+
+export function shift_up_right(bb: number): number {
+  return (bb << 9) & ~BB_FILE_A & BB_ALL;
+}
+
+export function shift_down_left(bb: number): number {
+  return (bb >> 9) & ~BB_FILE_H;
+}
+export function shift_down_right(bb: number): number {
+  return (bb >> 7) & ~BB_FILE_A;
+}
+
+function slidingAttacks(
+  squareAsInt: number,
+  occupied: number,
+  deltaList: Array<number>
+): number {
+  let attacks = BB_EMPTY;
+
+  deltaList.forEach((delta) => {
+    let sq = squareAsInt;
+    sq += delta;
+    const squareIsNotInStandardRange = !(0 <= sq && sq < 64);
+    const squareDistanceIsGreaterThan2 =
+      Square.squareDistance(sq, sq - delta) > 2;
+    while (!squareIsNotInStandardRange || !squareDistanceIsGreaterThan2) {
+      sq += delta;
+      attacks |= BB_SQUARES[sq];
+      if (occupied & BB_SQUARES[sq]) break;
+    }
+  });
+
+  return attacks;
+}
+
+function stepAttacks(squareAsInt: number, deltaList: Array<number>): number {
+  return slidingAttacks(squareAsInt, BB_ALL, deltaList);
+}
+
+export const BB_KNIGHT_ATTACKS = SQUARES.map((square) =>
+  stepAttacks(square, [17, 15, 10, 6, -17, -15, -10, -6])
+);
+export const BB_KING_ATTACKS = SQUARES.map((square) =>
+  stepAttacks(square, [9, 8, 7, 1, -9, -8, -7, -1])
+);
+export const BB_PAWN_ATTACKS = [
+  [-7, -9],
+  [7, 9],
+].map((deltaList) => SQUARES.map((square) => stepAttacks(square, deltaList)));
+
+function edges(squareAsInt: number): number {
+  return (
+    ((BB_RANK_1 | BB_RANK_8) & ~BB_RANKS[Square.squareRank(squareAsInt)]) |
+    ((BB_FILE_A | BB_FILE_H) & ~BB_FILES[Square.squareFile(squareAsInt)])
+  );
+}
+
+function* carryRippler(mask: number): Generator<number> {
+  // Carry-Rippler trick to iterate subsets of mask.
+  let subset = BB_EMPTY;
+  yield subset;
+  while (subset) {
+    subset = (subset - mask) & mask;
+    yield subset;
+  }
+}
+
+function attackTable(
+  deltaList: Array<number>
+): [Array<number>, Array<Record<number, number>>] {
+  const maskTable: number[] = [];
+  const attackTable: Record<number, number>[] = [];
+
+  SQUARES.forEach((square) => {
+    const attacks: Record<number, number> = {};
+    let mask = slidingAttacks(square, 0, deltaList) & ~edges(square);
+    for (let subset of carryRippler(mask)) {
+      attacks[subset] = slidingAttacks(square, subset, deltaList);
+    }
+    attackTable.push(attacks);
+    maskTable.push(mask);
+  });
+  return [maskTable, attackTable];
+}
+
+export const [BB_DIAG_MASKS, BB_DIAG_ATTACKS] = attackTable([-9, -7, 7, 9]);
+export const [BB_FILE_MASKS, BB_FILE_ATTACKS] = attackTable([-8, 8]);
+export const [BB_RANK_MASKS, BB_RANK_ATTACKS] = attackTable([-1, 1]);
+
+function rayList(): number[][] {
+  let rayList: number[][] = [];
+  BB_SQUARES.forEach((bb_square, index) => {
+    let rayRowList: number[] = [];
+    BB_SQUARES.forEach((bb_square_, index_) => {
+      if (BB_DIAG_ATTACKS[index][0] & bb_square_) {
+        rayRowList = [
+          ...rayRowList,
+          (BB_DIAG_ATTACKS[index][0] & BB_DIAG_ATTACKS[index_][0]) |
+            bb_square |
+            bb_square_,
+        ];
+      } else if (BB_RANK_ATTACKS[index][0] & bb_square_) {
+        rayRowList = [...rayRowList, BB_RANK_ATTACKS[index][0] | bb_square];
+      } else if (BB_FILE_ATTACKS[index][0] & bb_square_) {
+        rayRowList = [...rayRowList, BB_FILE_ATTACKS[index][0] | bb_square];
+      } else {
+        rayRowList = [...rayRowList, BB_EMPTY];
+      }
+    });
+  });
+  return rayList;
+}
+
+export const BB_RAYS = rayList();
+
+export function ray(squareAAsInt: number, squareBAsInt: number): number {
+  return BB_RAYS[squareAAsInt][squareBAsInt];
+}
+
+export function between(squareAAsInt: number, squareBAsInt: number): number {
+  const bb =
+    BB_RAYS[squareAAsInt][squareBAsInt] &
+    ((BB_ALL << squareAAsInt) ^ (BB_ALL << squareBAsInt));
+  return bb & (bb - 1);
+}
+
+export const SAN_REGEX = new RegExp(
+  "^([NBKRQ])?([a-h])?([1-8])?[-x]?([a-h][1-8])(=?[nbrqkNBRQK])?[+#]?Z"
+);
+
+export const FEN_CASTLING_REGEX = new RegExp(
+  "^(?:-|[KQABCDEFGH]{0,2}[kqabcdefgh]{0,2})Z"
+);
