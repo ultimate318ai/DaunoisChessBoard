@@ -4,32 +4,21 @@ export type Colors = { white: true; black: false };
 
 export type ColorName = "white" | "black";
 
-export const Piece = {
-  1: {
-    name: "pawn",
-    symbol: "p",
-  },
-  2: {
-    name: "knight",
-    symbol: "n",
-  },
-  3: {
-    name: "bishop",
-    symbol: "b",
-  },
-  4: {
-    name: "rook",
-    symbol: "r",
-  },
-  5: {
-    name: "queen",
-    symbol: "q",
-  },
-  6: {
-    name: "king",
-    symbol: "k",
-  },
-};
+export const PIECE_TYPES = [...Array(7).keys()];
+
+export const [PAWN, KNIGHT, BISHOP, ROOK, QUEEN, KING] = PIECE_TYPES;
+
+export const PIECE_SYMBOLS = [null, "p", "n", "b", "r", "q", "k"];
+
+export const PIECE_NAMES = [
+  null,
+  "pawn",
+  "knight",
+  "bishop",
+  "rook",
+  "queen",
+  "king",
+];
 
 export const UNICODE_PIECE_SYMBOLS = {
   R: "♖",
@@ -596,3 +585,44 @@ export const SAN_REGEX = new RegExp(
 export const FEN_CASTLING_REGEX = new RegExp(
   "^(?:-|[KQABCDEFGH]{0,2}[kqabcdefgh]{0,2})Z"
 );
+
+export class Piece {
+  pieceType: number;
+  color: ColorName;
+  constructor(pieceType: number, color: ColorName) {
+    this.pieceType = pieceType;
+    this.color = color;
+  }
+
+  get symbol(): string {
+    const symbol = PIECE_SYMBOLS[this.pieceType];
+    if (symbol == null) throw new Error("wrong piece symbol");
+    return symbol;
+  }
+
+  get unicodeSymbol(): string {
+    const symbol = this.symbol;
+    if (
+      symbol !== "R" &&
+      symbol !== "r" &&
+      symbol !== "K" &&
+      symbol !== "k" &&
+      symbol !== "N" &&
+      symbol !== "n" &&
+      symbol !== "P" &&
+      symbol !== "p" &&
+      symbol !== "Q" &&
+      symbol !== "q" &&
+      symbol !== "B" &&
+      symbol !== "b"
+    )
+      throw new Error("Invalid piece symbol");
+    return UNICODE_PIECE_SYMBOLS[symbol];
+  }
+  static fromSymbol(symbol: string) {
+    return new Piece(
+      PIECE_SYMBOLS.indexOf(symbol.toLocaleLowerCase()),
+      symbol.toLocaleLowerCase() === symbol ? "white" : "black"
+    );
+  }
+}
