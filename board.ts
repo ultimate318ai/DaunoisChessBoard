@@ -8,7 +8,17 @@ export const PIECE_TYPES = [...Array(7).keys()];
 
 export const [PAWN, KNIGHT, BISHOP, ROOK, QUEEN, KING] = PIECE_TYPES;
 
-export const PIECE_SYMBOLS = [null, "p", "n", "b", "r", "q", "k"];
+export type PieceSymbol = "p" | "n" | "b" | "r" | "q" | "k";
+
+export const PIECE_SYMBOLS: (PieceSymbol | null)[] = [
+  null,
+  "p",
+  "n",
+  "b",
+  "r",
+  "q",
+  "k",
+];
 
 export const PIECE_NAMES = [
   null,
@@ -621,8 +631,118 @@ export class Piece {
   }
   static fromSymbol(symbol: string) {
     return new Piece(
-      PIECE_SYMBOLS.indexOf(symbol.toLocaleLowerCase()),
+      PIECE_SYMBOLS.indexOf(symbol.toLocaleLowerCase() as PieceSymbol),
       symbol.toLocaleLowerCase() === symbol ? "white" : "black"
     );
+  }
+}
+
+//**     Represents a move from a square to a square and possibly the promotion
+/* piece type.
+ * Drops and null moves are supported..
+ */
+export class Move {
+  fromSquare: number;
+  toSquare: number;
+  promotion?: PieceSymbol;
+  drop?: PieceSymbol;
+
+  constructor(
+    fromSquare: number,
+    toSquare: number,
+    promotion?: PieceSymbol,
+    drop?: PieceSymbol
+  ) {
+    this.fromSquare = fromSquare;
+    this.toSquare = toSquare;
+    this.promotion = promotion;
+    this.drop = drop;
+  }
+
+  get from() {
+    return this.fromSquare;
+  }
+
+  get to() {
+    return this.toSquare;
+  }
+
+  /**
+   * Gets a UCI string for the move.
+
+    For example, a move from a7 to a8 would be ``a7a8`` or ``a7a8q``
+    (if the latter is a promotion to a queen).
+
+    The UCI representation of a null move is ``0000``.
+   */
+  uci(): string {
+    if (this.drop)
+      return `${this.drop.toLocaleUpperCase()}@${SQUARE_NAMES[this.toSquare]}`;
+    if (this.promotion)
+      return `${SQUARE_NAMES[this.fromSquare]}${SQUARE_NAMES[this.toSquare]}${
+        this.promotion
+      }`;
+    if (!this.isNull)
+      return `${SQUARE_NAMES[this.fromSquare]}${SQUARE_NAMES[this.toSquare]}`;
+    return "0000";
+  }
+
+  /**
+ * Parses a UCI string.
+
+  @throws `InvalidMoveError` if the UCI string is invalid.
+ */
+  static fromUci(uci: string): Move {
+    if (uci === "0000") return Move.null();
+    if (uci.length === 4 && uci[1] === "@") {
+      const drop = PIECE_SYMBOLS.find(
+        (piece) => piece === uci[0].toLocaleLowerCase()
+      );
+      const square = SQUARE_NAMES.indexOf(uci.slice(2) as SquareName);
+      if (!drop || square === -1)
+        throw new InvalidMoveError(`Invalid uci :${uci}`);
+      const move = {
+        fromSquare: square,
+        toSquare: square,
+        drop: drop,
+      };
+      return new Move(square, square, undefined, drop);
+    } else if (uci.length <= 4 && uci.length <= 5) {
+      const fromSquare = SQUARE_NAMES.indexOf(uci.slice(0, 2) as SquareName);
+      const toSquare = SQUARE_NAMES.indexOf(uci.slice(2, 4) as SquareName);
+      const promotion =
+        uci.length === 5
+          ? PIECE_SYMBOLS.find((piece) => piece === uci[4])
+          : undefined;
+      if (fromSquare === -1 || toSquare === -1 || !promotion)
+        throw new InvalidMoveError(`Invalid uci :${uci}`);
+      else if (fromSquare === toSquare)
+        throw new InvalidMoveError(
+          `invalid uci (use 0000 for null moves): ${uci}`
+        );
+      return new Move(fromSquare, toSquare, promotion);
+    }
+    throw new InvalidMoveError(
+      `expected uci string to be of length 4 or 5: ${uci}`
+    );
+  }
+  /**
+    Gets a null move.
+
+    A null move just passes the turn to the other side (and possibly
+    forfeits en passant capturing). Null moves evaluate to ``False`` in
+    boolean contexts.
+    @returns new null Move created.
+   */
+  static null(): Move {
+    return new Move(0, 0);
+  }
+
+  toString() {
+    return this.uci();
+  }
+
+  get isNull(): boolean {
+    return this.fromSquare === 0 && this.fromSquare === this.toSquare;
   }
 }
