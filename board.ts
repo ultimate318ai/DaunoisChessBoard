@@ -577,14 +577,14 @@ function rayList(): number[][] {
 
 export const BB_RAYS = rayList();
 
-export function ray(squareAAsInt: number, squareBAsInt: number): number {
-  return BB_RAYS[squareAAsInt][squareBAsInt];
+export function ray(squareAsInt: number, squareBAsInt: number): number {
+  return BB_RAYS[squareAsInt][squareBAsInt];
 }
 
-export function between(squareAAsInt: number, squareBAsInt: number): number {
+export function between(squareAsInt: number, squareBAsInt: number): number {
   const bb =
-    BB_RAYS[squareAAsInt][squareBAsInt] &
-    ((BB_ALL << squareAAsInt) ^ (BB_ALL << squareBAsInt));
+    BB_RAYS[squareAsInt][squareBAsInt] &
+    ((BB_ALL << squareAsInt) ^ (BB_ALL << squareBAsInt));
   return bb & (bb - 1);
 }
 
@@ -744,5 +744,185 @@ export class Move {
 
   get isNull(): boolean {
     return this.fromSquare === 0 && this.fromSquare === this.toSquare;
+  }
+}
+
+class SquareSet {
+  private mask: number;
+  constructor(squaresAsInt: number) {
+    this.mask = squaresAsInt & BB_ALL;
+  }
+}
+
+interface State {
+  pawnListAsNumber: number;
+  knightListAsNumber: number;
+  bishopListAsNumber: number;
+  rookListAsNumber: number;
+  queenListAsNumber: number;
+  kingListAsNumber: number;
+  promotedListAsNumber: number;
+  occupiedSquareListByColor: {
+    white: number;
+    black: number;
+  };
+  occupiedSquareListAsNumber: number;
+}
+/**
+ * 
+ * 
+ * A board representing the position of chess pieces.
+
+  The board is initialized with the standard chess starting position, unless
+  otherwise specified in the optional *boardFen* argument. If *boardFen*
+  is ``null``, an empty board is created.
+ * 
+ */
+export class AbstractChessBoard {
+  private _state: State;
+
+  constructor(boardFen?: string) {}
+
+  resetBoard(): void {
+    this._state = {
+      pawnListAsNumber: BB_RANK_2 | BB_RANK_7,
+      knightListAsNumber: BB_B1 | BB_G1 | BB_B8 | BB_G8,
+      bishopListAsNumber: BB_C1 | BB_F1 | BB_C8 | BB_F8,
+      rookListAsNumber: BB_CORNERS,
+      queenListAsNumber: BB_D1 | BB_D8,
+      kingListAsNumber: BB_E1 | BB_E8,
+
+      promotedListAsNumber: BB_EMPTY,
+
+      occupiedSquareListByColor: {
+        white: BB_RANK_1 | BB_RANK_2,
+        black: BB_RANK_7 | BB_RANK_8,
+      },
+      occupiedSquareListAsNumber: BB_RANK_1 | BB_RANK_2 | BB_RANK_7 | BB_RANK_8,
+    };
+  }
+
+  clearBoard(): void {
+    this._state = {
+      pawnListAsNumber: BB_EMPTY,
+      knightListAsNumber: BB_EMPTY,
+      bishopListAsNumber: BB_EMPTY,
+      rookListAsNumber: BB_EMPTY,
+      queenListAsNumber: BB_EMPTY,
+      kingListAsNumber: BB_EMPTY,
+
+      promotedListAsNumber: BB_EMPTY,
+
+      occupiedSquareListByColor: {
+        white: BB_EMPTY,
+        black: BB_EMPTY,
+      },
+      occupiedSquareListAsNumber: BB_EMPTY,
+    };
+  }
+
+  piecesMask(pieceTypeAsInt: number, color: ColorName): number {
+    let bb;
+    switch (pieceTypeAsInt) {
+      case PAWN:
+        bb = this._state.pawnListAsNumber;
+        break;
+      case KNIGHT:
+        bb = this._state.knightListAsNumber;
+        break;
+      case BISHOP:
+        bb = this._state.bishopListAsNumber;
+        break;
+      case ROOK:
+        bb = this._state.rookListAsNumber;
+        break;
+      case QUEEN:
+        bb = this._state.queenListAsNumber;
+        break;
+      case KING:
+        bb = this._state.kingListAsNumber;
+        break;
+      default:
+        throw new Error("Wrong piece type given");
+    }
+    return bb & this._state.occupiedSquareListByColor[color];
+  }
+
+  pieces(pieceTypeAsNumber: number, color: ColorName): SquareSet {
+    return new SquareSet(this.piecesMask(pieceTypeAsNumber, color));
+  }
+
+  pieceAt(squareAsInt: number): Piece | null {
+    const piece_type = this.pieceTypeAt(squareAsInt);
+    if (piece_type) {
+      const mask = BB_SQUARES[squareAsInt];
+      const color: ColorName =
+        this._state.occupiedSquareListByColor.white & mask ? "white" : "black";
+      return new Piece(piece_type, color);
+    }
+    return null;
+  }
+
+  pieceTypeAt(squareAsInt: number): number | null {
+    const mask = BB_SQUARES[squareAsInt];
+
+    if (!(this._state.occupiedSquareListAsNumber & mask)) return null;
+    if (this._state.pawnListAsNumber & mask) return PAWN;
+    if (this._state.knightListAsNumber & mask) return KNIGHT;
+    if (this._state.bishopListAsNumber & mask) return BISHOP;
+    if (this._state.rookListAsNumber & mask) return ROOK;
+    if (this._state.queenListAsNumber & mask) return QUEEN;
+    return KING;
+  }
+
+  colorAt(squareAsInt: number): ColorName | null {
+    const mask = BB_SQUARES[squareAsInt];
+    if (this._state.occupiedSquareListByColor.white & mask) return "white";
+    if (this._state.occupiedSquareListByColor.black & mask) return "black";
+    return null;
+  }
+
+  king(color: ColorName): number | null {
+    const colorData =
+      color === "white"
+        ? this._state.occupiedSquareListByColor.white
+        : this._state.occupiedSquareListByColor.black;
+    const kingMask =
+      colorData &
+      this._state.kingListAsNumber &
+      ~this._state.promotedListAsNumber;
+    return kingMask ? msb(kingMask) : null;
+  }
+
+  attacksMask(squareAsInt: number): number {
+    const mask = BB_SQUARES[squareAsInt];
+    BB_PAWN_ATTACKS;
+    if (mask & this._state.pawnListAsNumber) {
+      const colorAsNumber =
+        this._state.occupiedSquareListByColor.white & mask ? 1 : 0;
+      return BB_PAWN_ATTACKS[colorAsNumber][squareAsInt];
+    }
+    if (mask & this._state.knightListAsNumber)
+      return BB_KNIGHT_ATTACKS[squareAsInt];
+    if (mask & this._state.kingListAsNumber)
+      return BB_KING_ATTACKS[squareAsInt];
+    let attacks = 0;
+    const bishopsAttack = mask & this._state.bishopListAsNumber;
+    const queensAttack = mask & this._state.queenListAsNumber;
+    const rooksAttack = mask & this._state.rookListAsNumber;
+    if (bishopsAttack || queensAttack)
+      attacks =
+        BB_DIAG_ATTACKS[squareAsInt][
+          BB_DIAG_MASKS[squareAsInt] & this._state.occupiedSquareListAsNumber
+        ];
+    if (rooksAttack || queensAttack)
+      attacks |=
+        BB_RANK_ATTACKS[squareAsInt][
+          BB_RANK_MASKS[squareAsInt] & this._state.occupiedSquareListAsNumber
+        ] |
+        BB_FILE_ATTACKS[squareAsInt][
+          BB_FILE_MASKS[squareAsInt] & this._state.occupiedSquareListAsNumber
+        ];
+    return attacks;
   }
 }
