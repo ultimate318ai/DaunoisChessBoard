@@ -110,22 +110,16 @@ export class AmbiguousMoveError extends Error {}
 
 export type SquareName = `${FileName}${RankName}`;
 
-function zip<T extends Array<any>>(...arrays: T): [...any[]] {
-  const arrayList = arrays;
-  if (!arrayList.length) return [];
-  else if (arrayList.length === 1) return arrayList;
-  const firstArray = arrayList.shift();
-
-  if (!firstArray) return [];
-  return firstArray.flatMap((firstArrayValue: any, index: number) => {
-    const kElementList = arrayList.map((array) => {
-      return array[index];
-    });
-    return [firstArrayValue, ...kElementList];
+function zip<T, U>(arrayT: Array<T>, arrayU: Array<U>): [T, U][] {
+  return arrayT.map((arrayTValue: T, index: number) => {
+    return [arrayTValue, arrayU[index]];
   });
 }
 
-export const SQUARE_NAMES: SquareName[] = zip(FILE_NAMES, RANK_NAMES);
+export const SQUARE_NAMES = zip(
+  FILE_NAMES,
+  RANK_NAMES
+) as unknown as SquareName[];
 
 export const SQUARES = [...Array(64).keys()];
 
@@ -781,7 +775,50 @@ interface State {
 export class AbstractChessBoard {
   private _state: State;
 
-  constructor(boardFen?: string) {}
+  constructor(boardFen?: string) {} //TODO
+
+  get queens() {
+    return this._state.queenListAsNumber;
+  }
+  get kings() {
+    return this._state.kingListAsNumber;
+  }
+
+  get rooks() {
+    return this._state.rookListAsNumber;
+  }
+
+  get knights() {
+    return this._state.knightListAsNumber;
+  }
+
+  get bishops() {
+    return this._state.bishopListAsNumber;
+  }
+
+  get pawns() {
+    return this._state.pawnListAsNumber;
+  }
+
+  get occupied() {
+    return this._state.occupiedSquareListAsNumber;
+  }
+
+  get promoted() {
+    return this._state.promotedListAsNumber;
+  }
+
+  get occupiedWhite() {
+    return this._state.occupiedSquareListByColor.white;
+  }
+
+  get occupiedBlack() {
+    return this._state.occupiedSquareListByColor.black;
+  }
+
+  occupiedByColorName(colorName: ColorName) {
+    return colorName === "white" ? this.occupiedWhite : this.occupiedBlack;
+  }
 
   resetBoard(): void {
     this._state = {
@@ -825,22 +862,22 @@ export class AbstractChessBoard {
     let bb;
     switch (pieceTypeAsInt) {
       case PAWN:
-        bb = this._state.pawnListAsNumber;
+        bb = this.pawns;
         break;
       case KNIGHT:
-        bb = this._state.knightListAsNumber;
+        bb = this.knights;
         break;
       case BISHOP:
-        bb = this._state.bishopListAsNumber;
+        bb = this.bishops;
         break;
       case ROOK:
-        bb = this._state.rookListAsNumber;
+        bb = this.rooks;
         break;
       case QUEEN:
-        bb = this._state.queenListAsNumber;
+        bb = this.queens;
         break;
       case KING:
-        bb = this._state.kingListAsNumber;
+        bb = this.kings;
         break;
       default:
         throw new Error("Wrong piece type given");
@@ -856,8 +893,7 @@ export class AbstractChessBoard {
     const piece_type = this.pieceTypeAt(squareAsInt);
     if (piece_type) {
       const mask = BB_SQUARES[squareAsInt];
-      const color: ColorName =
-        this._state.occupiedSquareListByColor.white & mask ? "white" : "black";
+      const color: ColorName = this.occupiedWhite & mask ? "white" : "black";
       return new Piece(piece_type, color);
     }
     return null;
@@ -866,63 +902,117 @@ export class AbstractChessBoard {
   pieceTypeAt(squareAsInt: number): number | null {
     const mask = BB_SQUARES[squareAsInt];
 
-    if (!(this._state.occupiedSquareListAsNumber & mask)) return null;
-    if (this._state.pawnListAsNumber & mask) return PAWN;
-    if (this._state.knightListAsNumber & mask) return KNIGHT;
-    if (this._state.bishopListAsNumber & mask) return BISHOP;
-    if (this._state.rookListAsNumber & mask) return ROOK;
-    if (this._state.queenListAsNumber & mask) return QUEEN;
+    if (!(this.occupied & mask)) return null;
+    if (this.pawns & mask) return PAWN;
+    if (this.knights & mask) return KNIGHT;
+    if (this.bishops & mask) return BISHOP;
+    if (this.rooks & mask) return ROOK;
+    if (this.queens & mask) return QUEEN;
     return KING;
   }
 
   colorAt(squareAsInt: number): ColorName | null {
     const mask = BB_SQUARES[squareAsInt];
-    if (this._state.occupiedSquareListByColor.white & mask) return "white";
-    if (this._state.occupiedSquareListByColor.black & mask) return "black";
+    if (this.occupiedWhite & mask) return "white";
+    if (this.occupiedBlack & mask) return "black";
     return null;
   }
 
-  king(color: ColorName): number | null {
+  kingSquare(color: ColorName): number | null {
     const colorData =
-      color === "white"
-        ? this._state.occupiedSquareListByColor.white
-        : this._state.occupiedSquareListByColor.black;
-    const kingMask =
-      colorData &
-      this._state.kingListAsNumber &
-      ~this._state.promotedListAsNumber;
+      color === "white" ? this.occupiedWhite : this.occupiedBlack;
+    const kingMask = colorData & this.kings & ~this.promoted;
     return kingMask ? msb(kingMask) : null;
   }
 
   attacksMask(squareAsInt: number): number {
     const mask = BB_SQUARES[squareAsInt];
     BB_PAWN_ATTACKS;
-    if (mask & this._state.pawnListAsNumber) {
-      const colorAsNumber =
-        this._state.occupiedSquareListByColor.white & mask ? 1 : 0;
+    if (mask & this.pawns) {
+      const colorAsNumber = this.occupiedWhite & mask ? 1 : 0;
       return BB_PAWN_ATTACKS[colorAsNumber][squareAsInt];
     }
-    if (mask & this._state.knightListAsNumber)
-      return BB_KNIGHT_ATTACKS[squareAsInt];
-    if (mask & this._state.kingListAsNumber)
-      return BB_KING_ATTACKS[squareAsInt];
+    if (mask & this.knights) return BB_KNIGHT_ATTACKS[squareAsInt];
+    if (mask & this.kings) return BB_KING_ATTACKS[squareAsInt];
     let attacks = 0;
-    const bishopsAttack = mask & this._state.bishopListAsNumber;
-    const queensAttack = mask & this._state.queenListAsNumber;
-    const rooksAttack = mask & this._state.rookListAsNumber;
+    const bishopsAttack = mask & this.bishops;
+    const queensAttack = mask & this.queens;
+    const rooksAttack = mask & this.rooks;
     if (bishopsAttack || queensAttack)
       attacks =
         BB_DIAG_ATTACKS[squareAsInt][
-          BB_DIAG_MASKS[squareAsInt] & this._state.occupiedSquareListAsNumber
+          BB_DIAG_MASKS[squareAsInt] & this.occupied
         ];
     if (rooksAttack || queensAttack)
       attacks |=
         BB_RANK_ATTACKS[squareAsInt][
-          BB_RANK_MASKS[squareAsInt] & this._state.occupiedSquareListAsNumber
+          BB_RANK_MASKS[squareAsInt] & this.occupied
         ] |
         BB_FILE_ATTACKS[squareAsInt][
-          BB_FILE_MASKS[squareAsInt] & this._state.occupiedSquareListAsNumber
+          BB_FILE_MASKS[squareAsInt] & this.occupied
         ];
     return attacks;
+  }
+
+  attacks(squareAsInt: number): SquareSet {
+    return new SquareSet(this.attacksMask(squareAsInt));
+  }
+
+  attackersMask(
+    color: ColorName,
+    squareAsInt: number,
+    occupied: number = this.occupied
+  ): number {
+    const rankPieces = BB_RANK_MASKS[squareAsInt] & occupied;
+    const filePieces = BB_FILE_MASKS[squareAsInt] & occupied;
+    const diagPieces = BB_DIAG_MASKS[squareAsInt] & occupied;
+
+    const queensRooksList = this.queens | this.rooks;
+    const queensBishopsList = this.queens | this.bishops;
+    const attackerColorAsInt = color === "white" ? 0 : 1;
+
+    const attackers =
+      (BB_KING_ATTACKS[squareAsInt] & this.kings) |
+      (BB_KNIGHT_ATTACKS[squareAsInt] & this.knights) |
+      (BB_RANK_ATTACKS[squareAsInt][rankPieces] & queensRooksList) |
+      (BB_FILE_ATTACKS[squareAsInt][filePieces] & queensRooksList) |
+      (BB_DIAG_ATTACKS[squareAsInt][diagPieces] & queensBishopsList) |
+      (BB_PAWN_ATTACKS[attackerColorAsInt][squareAsInt] & this.pawns);
+
+    return attackers & this.occupiedByColorName(color);
+  }
+  isAttackedBy(color: ColorName, squareAsInt: number): boolean {
+    return Boolean(this.attackersMask(color, squareAsInt));
+  }
+  attackers(color: ColorName, squareAsInt: number): SquareSet {
+    return new SquareSet(this.attackersMask(color, squareAsInt));
+  }
+  pinMask(color: ColorName, squareAsInt: number): number {
+    const kingSquare = this.kingSquare(color);
+    if (kingSquare === null) return BB_ALL;
+
+    const squareMask = BB_SQUARES[squareAsInt];
+    const attackTypeList = [BB_FILE_ATTACKS, BB_RANK_ATTACKS, BB_DIAG_ATTACKS];
+    const attackersList = [
+      this.rooks | this.queens,
+      this.rooks | this.queens,
+      this.bishops | this.queens,
+    ];
+    for (let [attacks, sliders] of zip(attackTypeList, attackersList)) {
+      const rays = attacks[kingSquare][0];
+      if (rays & squareMask) {
+        const otherColor: ColorName = color === "white" ? "black" : "white";
+        const snipers = rays & sliders & this.occupiedByColorName(otherColor);
+        for (const sniper of scanReversed(snipers)) {
+          if (
+            (between(sniper, kingSquare) & (this.occupied | squareMask)) ===
+            squareMask
+          )
+            return ray(kingSquare, sniper);
+          return BB_ALL;
+        }
+      }
+    }
+    return BB_ALL;
   }
 }
