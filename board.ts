@@ -4,6 +4,12 @@ export type Colors = { white: true; black: false };
 
 export type ColorName = "white" | "black";
 
+export type SquareNumber = number;
+
+export type PieceNumber = number;
+
+export type PieceType = number;
+
 export const PIECE_TYPES = [...Array(7).keys()];
 
 export const [PAWN, KNIGHT, BISHOP, ROOK, QUEEN, KING] = PIECE_TYPES;
@@ -304,17 +310,17 @@ class Square {
   static isSquare(value: string): value is SquareName {
     return SQUARE_NAMES.indexOf(value as any) !== -1;
   }
-  static squareName(squareAsInt: number): SquareName {
-    return SQUARE_NAMES[squareAsInt];
+  static squareName(square: SquareNumber): SquareName {
+    return SQUARE_NAMES[square];
   }
-  static squareAsInt(file: number, rank: number): number {
+  static square(file: number, rank: number): number {
     return rank * 8 + file;
   }
-  static squareFile(squareAsInt: number): number {
-    return squareAsInt & 7;
+  static squareFile(square: SquareNumber): number {
+    return square & 7;
   }
-  static squareRank(squareAsInt: number): number {
-    return squareAsInt >> 3;
+  static squareRank(square: SquareNumber): number {
+    return square >> 3;
   }
   static squareDistance(a: number, b: number) {
     return Math.max(
@@ -343,8 +349,8 @@ class Square {
     const m = Math.ceil(Math.max(dx / 2, dy / 2, (dx + dy) / 3));
     return m + ((m + dx + dy) % 2);
   }
-  static squareMirror(squareAsInt: number): number {
-    return squareAsInt ^ 0x38;
+  static squareMirror(square: SquareNumber): number {
+    return square ^ 0x38;
   }
 }
 export function dec2bin(dec: number) {
@@ -469,14 +475,14 @@ export function shift_down_right(bb: number): number {
 }
 
 function slidingAttacks(
-  squareAsInt: number,
+  square: SquareNumber,
   occupied: number,
   deltaList: Array<number>
 ): number {
   let attacks = BB_EMPTY;
 
   deltaList.forEach((delta) => {
-    let sq = squareAsInt;
+    let sq = square;
     sq += delta;
     const squareIsNotInStandardRange = !(0 <= sq && sq < 64);
     const squareDistanceIsGreaterThan2 =
@@ -491,8 +497,8 @@ function slidingAttacks(
   return attacks;
 }
 
-function stepAttacks(squareAsInt: number, deltaList: Array<number>): number {
-  return slidingAttacks(squareAsInt, BB_ALL, deltaList);
+function stepAttacks(square: SquareNumber, deltaList: Array<number>): number {
+  return slidingAttacks(square, BB_ALL, deltaList);
 }
 
 export const BB_KNIGHT_ATTACKS = SQUARES.map((square) =>
@@ -506,10 +512,10 @@ export const BB_PAWN_ATTACKS = [
   [7, 9],
 ].map((deltaList) => SQUARES.map((square) => stepAttacks(square, deltaList)));
 
-function edges(squareAsInt: number): number {
+function edges(square: SquareNumber): number {
   return (
-    ((BB_RANK_1 | BB_RANK_8) & ~BB_RANKS[Square.squareRank(squareAsInt)]) |
-    ((BB_FILE_A | BB_FILE_H) & ~BB_FILES[Square.squareFile(squareAsInt)])
+    ((BB_RANK_1 | BB_RANK_8) & ~BB_RANKS[Square.squareRank(square)]) |
+    ((BB_FILE_A | BB_FILE_H) & ~BB_FILES[Square.squareFile(square)])
   );
 }
 
@@ -571,14 +577,14 @@ function rayList(): number[][] {
 
 export const BB_RAYS = rayList();
 
-export function ray(squareAsInt: number, squareBAsInt: number): number {
-  return BB_RAYS[squareAsInt][squareBAsInt];
+export function ray(square: SquareNumber, squareBAsInt: number): number {
+  return BB_RAYS[square][squareBAsInt];
 }
 
-export function between(squareAsInt: number, squareBAsInt: number): number {
+export function between(square: SquareNumber, squareBAsInt: number): number {
   const bb =
-    BB_RAYS[squareAsInt][squareBAsInt] &
-    ((BB_ALL << squareAsInt) ^ (BB_ALL << squareBAsInt));
+    BB_RAYS[square][squareBAsInt] &
+    ((BB_ALL << square) ^ (BB_ALL << squareBAsInt));
   return bb & (bb - 1);
 }
 
@@ -591,9 +597,9 @@ export const FEN_CASTLING_REGEX = new RegExp(
 );
 
 export class Piece {
-  pieceType: number;
+  pieceType: PieceType;
   color: ColorName;
-  constructor(pieceType: number, color: ColorName) {
+  constructor(pieceType: PieceType, color: ColorName) {
     this.pieceType = pieceType;
     this.color = color;
   }
@@ -889,18 +895,18 @@ export class AbstractChessBoard {
     return new SquareSet(this.piecesMask(pieceTypeAsNumber, color));
   }
 
-  pieceAt(squareAsInt: number): Piece | null {
-    const piece_type = this.pieceTypeAt(squareAsInt);
+  pieceAt(square: SquareNumber): Piece | null {
+    const piece_type = this.pieceTypeAt(square);
     if (piece_type) {
-      const mask = BB_SQUARES[squareAsInt];
+      const mask = BB_SQUARES[square];
       const color: ColorName = this.occupiedWhite & mask ? "white" : "black";
       return new Piece(piece_type, color);
     }
     return null;
   }
 
-  pieceTypeAt(squareAsInt: number): number | null {
-    const mask = BB_SQUARES[squareAsInt];
+  pieceTypeAt(square: SquareNumber): number | null {
+    const mask = BB_SQUARES[square];
 
     if (!(this.occupied & mask)) return null;
     if (this.pawns & mask) return PAWN;
@@ -911,8 +917,8 @@ export class AbstractChessBoard {
     return KING;
   }
 
-  colorAt(squareAsInt: number): ColorName | null {
-    const mask = BB_SQUARES[squareAsInt];
+  colorAt(square: SquareNumber): ColorName | null {
+    const mask = BB_SQUARES[square];
     if (this.occupiedWhite & mask) return "white";
     if (this.occupiedBlack & mask) return "black";
     return null;
@@ -925,73 +931,66 @@ export class AbstractChessBoard {
     return kingMask ? msb(kingMask) : null;
   }
 
-  attacksMask(squareAsInt: number): number {
-    const mask = BB_SQUARES[squareAsInt];
+  attacksMask(square: SquareNumber): number {
+    const mask = BB_SQUARES[square];
     BB_PAWN_ATTACKS;
     if (mask & this.pawns) {
       const colorAsNumber = this.occupiedWhite & mask ? 1 : 0;
-      return BB_PAWN_ATTACKS[colorAsNumber][squareAsInt];
+      return BB_PAWN_ATTACKS[colorAsNumber][square];
     }
-    if (mask & this.knights) return BB_KNIGHT_ATTACKS[squareAsInt];
-    if (mask & this.kings) return BB_KING_ATTACKS[squareAsInt];
+    if (mask & this.knights) return BB_KNIGHT_ATTACKS[square];
+    if (mask & this.kings) return BB_KING_ATTACKS[square];
     let attacks = 0;
     const bishopsAttack = mask & this.bishops;
     const queensAttack = mask & this.queens;
     const rooksAttack = mask & this.rooks;
     if (bishopsAttack || queensAttack)
-      attacks =
-        BB_DIAG_ATTACKS[squareAsInt][
-          BB_DIAG_MASKS[squareAsInt] & this.occupied
-        ];
+      attacks = BB_DIAG_ATTACKS[square][BB_DIAG_MASKS[square] & this.occupied];
     if (rooksAttack || queensAttack)
       attacks |=
-        BB_RANK_ATTACKS[squareAsInt][
-          BB_RANK_MASKS[squareAsInt] & this.occupied
-        ] |
-        BB_FILE_ATTACKS[squareAsInt][
-          BB_FILE_MASKS[squareAsInt] & this.occupied
-        ];
+        BB_RANK_ATTACKS[square][BB_RANK_MASKS[square] & this.occupied] |
+        BB_FILE_ATTACKS[square][BB_FILE_MASKS[square] & this.occupied];
     return attacks;
   }
 
-  attacks(squareAsInt: number): SquareSet {
-    return new SquareSet(this.attacksMask(squareAsInt));
+  attacks(square: SquareNumber): SquareSet {
+    return new SquareSet(this.attacksMask(square));
   }
 
   attackersMask(
     color: ColorName,
-    squareAsInt: number,
+    square: SquareNumber,
     occupied: number = this.occupied
   ): number {
-    const rankPieces = BB_RANK_MASKS[squareAsInt] & occupied;
-    const filePieces = BB_FILE_MASKS[squareAsInt] & occupied;
-    const diagPieces = BB_DIAG_MASKS[squareAsInt] & occupied;
+    const rankPieces = BB_RANK_MASKS[square] & occupied;
+    const filePieces = BB_FILE_MASKS[square] & occupied;
+    const diagPieces = BB_DIAG_MASKS[square] & occupied;
 
     const queensRooksList = this.queens | this.rooks;
     const queensBishopsList = this.queens | this.bishops;
     const attackerColorAsInt = color === "white" ? 0 : 1;
 
     const attackers =
-      (BB_KING_ATTACKS[squareAsInt] & this.kings) |
-      (BB_KNIGHT_ATTACKS[squareAsInt] & this.knights) |
-      (BB_RANK_ATTACKS[squareAsInt][rankPieces] & queensRooksList) |
-      (BB_FILE_ATTACKS[squareAsInt][filePieces] & queensRooksList) |
-      (BB_DIAG_ATTACKS[squareAsInt][diagPieces] & queensBishopsList) |
-      (BB_PAWN_ATTACKS[attackerColorAsInt][squareAsInt] & this.pawns);
+      (BB_KING_ATTACKS[square] & this.kings) |
+      (BB_KNIGHT_ATTACKS[square] & this.knights) |
+      (BB_RANK_ATTACKS[square][rankPieces] & queensRooksList) |
+      (BB_FILE_ATTACKS[square][filePieces] & queensRooksList) |
+      (BB_DIAG_ATTACKS[square][diagPieces] & queensBishopsList) |
+      (BB_PAWN_ATTACKS[attackerColorAsInt][square] & this.pawns);
 
     return attackers & this.occupiedByColorName(color);
   }
-  isAttackedBy(color: ColorName, squareAsInt: number): boolean {
-    return Boolean(this.attackersMask(color, squareAsInt));
+  isAttackedBy(color: ColorName, square: SquareNumber): boolean {
+    return Boolean(this.attackersMask(color, square));
   }
-  attackers(color: ColorName, squareAsInt: number): SquareSet {
-    return new SquareSet(this.attackersMask(color, squareAsInt));
+  attackers(color: ColorName, square: SquareNumber): SquareSet {
+    return new SquareSet(this.attackersMask(color, square));
   }
-  pinMask(color: ColorName, squareAsInt: number): number {
+  pinMask(color: ColorName, square: SquareNumber): number {
     const kingSquare = this.kingSquare(color);
     if (kingSquare === null) return BB_ALL;
 
-    const squareMask = BB_SQUARES[squareAsInt];
+    const squareMask = BB_SQUARES[square];
     const attackTypeList = [BB_FILE_ATTACKS, BB_RANK_ATTACKS, BB_DIAG_ATTACKS];
     const attackersList = [
       this.rooks | this.queens,
@@ -1015,4 +1014,123 @@ export class AbstractChessBoard {
     }
     return BB_ALL;
   }
+  pin(color: ColorName, square: SquareNumber): SquareSet {
+    return new SquareSet(this.pinMask(color, square));
+  }
+  isPinned(color: ColorName, square: SquareNumber): boolean {
+    return this.pinMask(color, square) != BB_ALL;
+  }
+  private _removePieceAt(square: SquareNumber): number | null {
+    const pieceType = this.pieceTypeAt(square);
+    const mask = BB_SQUARES[square];
+
+    switch (pieceType) {
+      case PAWN:
+        this._state.pawnListAsNumber ^= mask;
+        break;
+      case KNIGHT:
+        this._state.knightListAsNumber ^= mask;
+        break;
+      case BISHOP:
+        this._state.bishopListAsNumber ^= mask;
+        break;
+      case ROOK:
+        this._state.rookListAsNumber ^= mask;
+        break;
+      case QUEEN:
+        this._state.queenListAsNumber ^= mask;
+        break;
+      case KING:
+        this._state.kingListAsNumber ^= mask;
+        break;
+      default:
+        return null;
+    }
+    this._state.occupiedSquareListAsNumber ^= mask;
+    this._state.occupiedSquareListByColor.white &= ~mask;
+    this._state.occupiedSquareListByColor.black &= ~mask;
+    this._state.promotedListAsNumber &= ~mask;
+
+    return pieceType;
+  }
+  removePieceAt(square: SquareNumber): Piece | null {
+    const color: ColorName = new Boolean(
+      this._state.occupiedSquareListByColor.white & BB_SQUARES[square]
+    )
+      ? "white"
+      : "black";
+    const pieceType = this._removePieceAt(square);
+    return pieceType ? new Piece(pieceType, color) : null;
+  }
+  private _setPieceAt(
+    square: SquareNumber,
+    pieceType: PieceType,
+    color: ColorName,
+    promoted: boolean = false
+  ): void {
+    this._removePieceAt(square);
+    const mask = BB_SQUARES[square];
+
+    switch (pieceType) {
+      case PAWN:
+        this._state.pawnListAsNumber |= mask;
+        break;
+      case KNIGHT:
+        this._state.knightListAsNumber |= mask;
+        break;
+      case BISHOP:
+        this._state.bishopListAsNumber |= mask;
+        break;
+      case ROOK:
+        this._state.rookListAsNumber |= mask;
+        break;
+      case QUEEN:
+        this._state.queenListAsNumber |= mask;
+        break;
+      case KING:
+        this._state.kingListAsNumber |= mask;
+        break;
+      default:
+        return;
+    }
+    this._state.occupiedSquareListAsNumber ^= mask;
+    this._state.occupiedSquareListByColor[color] ^= mask;
+    if (promoted) this._state.promotedListAsNumber ^= mask;
+  }
+  setPieceAt(
+    square: SquareNumber,
+    piece: Piece | null,
+    promoted: boolean = false
+  ): void {
+    if (!piece) this._removePieceAt(square);
+    else {
+      this._setPieceAt(square, piece.pieceType, piece.color, promoted);
+    }
+  }
+  boardFen(promoted: boolean = false): string {
+    const builderList: string[] = [];
+    let empty = 0;
+    SQUARES_180.forEach((square) => {
+      const piece = this.pieceAt(square);
+      if (!piece) empty += 1;
+      else {
+        if (empty > 0) {
+          builderList.push(String(empty));
+          empty = 0;
+        }
+        builderList.push(piece.symbol);
+        if (promoted && BB_SQUARES[square] & this._state.promotedListAsNumber)
+          builderList.push("~");
+      }
+      if (BB_SQUARES[square] & BB_FILE_H) {
+        if (empty > 0) {
+          builderList.push(String(empty));
+          empty = 0;
+        }
+        if (square !== H1) builderList.push("/");
+      }
+    });
+    return builderList.join("");
+  }
+  // TODO: def _set_board_fen(self, fen: str) -> None:
 }
