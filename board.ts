@@ -1132,5 +1132,77 @@ export class AbstractChessBoard {
     });
     return builderList.join("");
   }
-  // TODO: def _set_board_fen(self, fen: str) -> None:
+  setBoardFen(fen: string): void {
+    const fen_ = fen.trim();
+    if (fen_.search(" ") !== -1)
+      throw new Error(
+        `Expected position part of fen, got multiple parts: ${fen}`
+      );
+
+    const rows = fen.split("/");
+    if (rows.length !== 8)
+      throw new Error(`expected 8 rows in position part of fen: ${fen}`);
+
+    rows.forEach((row) => {
+      let fieldSum = 0;
+      let previousWasDigit = false;
+      let previousWasPiece = false;
+      for (let char of row) {
+        const char_as_number = Number(char);
+        if (1 <= char_as_number && char_as_number <= 8) {
+          if (previousWasDigit)
+            throw new Error(
+              `two subsequent digits in position part of fen: ${fen}`
+            );
+
+          fieldSum += char_as_number;
+          previousWasDigit = true;
+          previousWasPiece = false;
+        } else if (char == "~") {
+          if (!previousWasPiece)
+            throw new Error(
+              `'~' not after piece in position part of fen: ${fen}`
+            );
+          previousWasDigit = false;
+          previousWasPiece = false;
+        } else if (
+          PIECE_SYMBOLS.find((piece) => piece === char.toLocaleLowerCase()) !==
+          undefined
+        ) {
+          fieldSum += 1;
+          previousWasDigit = false;
+          previousWasPiece = true;
+        } else
+          throw new Error(`invalid character in position part of fen: ${fen}`);
+      }
+      if (fieldSum !== 8)
+        throw new Error(
+          `expected 8 columns per row in position part of fen: ${fen}`
+        );
+    });
+
+    this.clearBoard();
+
+    let squareIndex = 0;
+    for (const char of fen) {
+      const char_as_number = Number(char);
+      if (1 <= char_as_number && char_as_number <= 8)
+        squareIndex += char_as_number;
+      else if (
+        PIECE_SYMBOLS.find((piece) => piece === char.toLocaleLowerCase()) !==
+        undefined
+      ) {
+        const piece = Piece.fromSymbol(char);
+        this._setPieceAt(
+          SQUARES_180[squareIndex],
+          piece.pieceType,
+          piece.color
+        );
+        squareIndex += 1;
+      } else if (char === "~")
+        this._state.promotedListAsNumber |=
+          BB_SQUARES[SQUARES_180[squareIndex - 1]];
+    }
+  }
+  //TODO: def piece_map(self, *, mask: Bitboard = BB_ALL) -> Dict[Square, Piece]:
 }
