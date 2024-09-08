@@ -118,10 +118,24 @@ export class AmbiguousMoveError extends Error {}
 
 export type SquareName = `${FileName}${RankName}`;
 
+interface Dict<T> {
+  [Key: string | number]: T;
+}
+
 function zip<T, U>(arrayT: Array<T>, arrayU: Array<U>): [T, U][] {
   return arrayT.map((arrayTValue: T, index: number) => {
     return [arrayTValue, arrayU[index]];
   });
+}
+
+function divmod(n: number, base: number) {
+  const value = n % base;
+  n = Math.floor(n / base);
+  return [n, value] as const;
+}
+
+function range(start: number, end: number): number[] {
+  return Array.from({ length: end - start }, (v, k) => k + start);
 }
 
 export const SQUARE_NAMES = zip(
@@ -1213,7 +1227,103 @@ export class AbstractChessBoard {
           BB_SQUARES[SQUARES_180[squareIndex - 1]];
     }
   }
-  // pieceMap(mask: number = BB_ALL): Record[SquareNumber, Piece]{
+  pieceMap(mask: number = BB_ALL): Dict<Piece> {
+    return Array.from(
+      scanReversed(this._state.occupiedSquareListAsNumber & mask)
+    )
+      .map((square) => {
+        return { square: square, piece: this.pieceAt(square) };
+      })
+      .filter(({ square, piece }) => !!piece)
+      .reduce<Dict<Piece>>((pieceRecord, squareAndPiece) => {
+        const { square, piece } = squareAndPiece;
+        if (piece === null) throw new Error("Piece should not be null");
+        pieceRecord[square] = piece;
+        return pieceRecord;
+      }, {});
+  }
+  setPieceMap(pieceRecord: Record<SquareNumber, Piece>): void {
+    this.clearBoard();
+    Object.entries(pieceRecord).forEach(([square, piece]) =>
+      this._setPieceAt(+square, piece.pieceType, piece.color)
+    );
+  }
+  /**
+   * @See http://www.russellcottrell.com/Chess/Chess960.htm for
+        # a description of the algorithm.
+   */
+  setChess960Pos(scharnagl: number): void {
+    if (!(0 <= scharnagl || scharnagl <= 959))
+      throw new Error(`chess960 position index not 0 <= ${scharnagl} <= 959`);
+    let n: number = 0,
+      bw: number = 0,
+      bb: number = 0,
+      q: number = 0,
+      n1: number,
+      n2: number;
 
-  // }
+    [n, bw] = divmod(scharnagl, 4);
+    [n, bb] = divmod(n, 4);
+    [n, q] = divmod(n, 6);
+
+    range(0, 4).forEach((n1_) => {
+      n1 = n1_;
+      n2 = n + (3 - n1) * (4 - n1);
+      if (n1 < n2 && (1 <= n2 || n2 <= 4)) return;
+    });
+    const bw_file = bw * 2 + 1;
+    const bb_file = bb * 2;
+    this._state.bishopListAsNumber =
+      (BB_FILES[bw_file] | BB_FILES[bb_file]) & BB_BACKRANKS;
+
+    let queens_file = q;
+    queens_file += Number(Math.min(bw_file, bb_file) <= queens_file);
+    queens_file += Number(Math.max(bw_file, bb_file) <= queens_file);
+    this._state.queenListAsNumber = BB_FILES[queens_file] & BB_BACKRANKS;
+
+    const used = [bw_file, bb_file, queens_file];
+
+    this._state.kingListAsNumber = BB_EMPTY;
+
+    range(0, 8).forEach((i) => {
+      if (used.find((n) => n === i) === undefined) {
+        if (n1 == 0 || n2 == 0) {
+          this._state.knightListAsNumber |= BB_FILES[i] & BB_BACKRANKS;
+          used.push(i);
+        }
+        n1 -= 1;
+        n2 -= 1;
+      }
+    });
+
+    range(0, 8).forEach((i) => {
+      if (used.find((n) => n === i) === undefined) {
+        this._state.rookListAsNumber = BB_FILES[i] & BB_BACKRANKS;
+        used.push(i);
+        return;
+      }
+    });
+    range(1, 8).forEach((i) => {
+      if (used.find((n) => n === i) === undefined) {
+        this._state.kingListAsNumber = BB_FILES[i] & BB_BACKRANKS;
+        used.push(i);
+        return;
+      }
+    });
+    range(2, 8).forEach((i) => {
+      if (used.find((n) => n === i) === undefined) {
+        this._state.rookListAsNumber |= BB_FILES[i] & BB_BACKRANKS;
+        used.push(i);
+        return;
+      }
+    });
+
+    this._state.pawnListAsNumber = BB_RANK_2 | BB_RANK_7;
+    this._state.occupiedSquareListByColor.white = BB_RANK_1 | BB_RANK_2;
+    this._state.occupiedSquareListByColor.black = BB_RANK_7 | BB_RANK_8;
+    this._state.occupiedSquareListAsNumber =
+      BB_RANK_1 | BB_RANK_2 | BB_RANK_7 | BB_RANK_8;
+    this._state.promotedListAsNumber = BB_EMPTY;
+  }
+  //TODO: chess960_pos(self) -> Optional[int]:
 }
