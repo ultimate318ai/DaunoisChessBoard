@@ -10,6 +10,8 @@ export type PieceNumber = number;
 
 export type PieceType = number;
 
+export type Bitboard = number;
+
 export const PIECE_TYPES = [...Array(7).keys()];
 
 export const [PAWN, KNIGHT, BISHOP, ROOK, QUEEN, KING] = PIECE_TYPES;
@@ -313,7 +315,7 @@ class Square {
   static squareName(square: SquareNumber): SquareName {
     return SQUARE_NAMES[square];
   }
-  static square(file: number, rank: number): number {
+  static square(file: number, rank: number): SquareNumber {
     return rank * 8 + file;
   }
   static squareFile(square: SquareNumber): number {
@@ -322,19 +324,19 @@ class Square {
   static squareRank(square: SquareNumber): number {
     return square >> 3;
   }
-  static squareDistance(a: number, b: number) {
+  static squareDistance(a: SquareNumber, b: SquareNumber) {
     return Math.max(
       Math.abs(this.squareFile(a) - this.squareFile(b)),
       Math.abs(this.squareRank(a) - this.squareRank(b))
     );
   }
-  static squareManhattanDistance(a: number, b: number) {
+  static squareManhattanDistance(a: SquareNumber, b: SquareNumber) {
     return (
       Math.abs(this.squareFile(a) - this.squareFile(b)) +
       Math.abs(this.squareRank(a) - this.squareRank(b))
     );
   }
-  static squareKnightDistance(a: number, b: number) {
+  static squareKnightDistance(a: SquareNumber, b: SquareNumber) {
     const dx = Math.abs(this.squareFile(a) - this.squareFile(b));
     const dy = Math.abs(this.squareRank(a) - this.squareRank(b));
     if (dx + dy === 1) return 3;
@@ -349,7 +351,7 @@ class Square {
     const m = Math.ceil(Math.max(dx / 2, dy / 2, (dx + dy) / 3));
     return m + ((m + dx + dy) % 2);
   }
-  static squareMirror(square: SquareNumber): number {
+  static squareMirror(square: SquareNumber): SquareNumber {
     return square ^ 0x38;
   }
 }
@@ -361,22 +363,26 @@ export function bitLength(value: number): number {
   return dec2bin(value).length;
 }
 
-export function lsb(bb: number): number {
+export function lsb(bb: Bitboard): number {
   return bitLength(bb & -bb) - 1;
 }
 
-export function* scanForward(bb: number): Generator<number, void, unknown> {
+export function* scanForward(
+  bb: Bitboard
+): Generator<SquareNumber, void, unknown> {
   while (bb) {
     const r = bb & -bb;
     yield bitLength(r) - 1;
     bb ^= r;
   }
 }
-export function msb(bb: number): number {
+export function msb(bb: Bitboard): number {
   return bitLength(bb) - 1;
 }
 
-export function* scanReversed(bb: number): Generator<number, void, unknown> {
+export function* scanReversed(
+  bb: Bitboard
+): Generator<SquareNumber, void, unknown> {
   while (bb) {
     const r = bitLength(bb) - 1;
     yield r;
@@ -384,7 +390,7 @@ export function* scanReversed(bb: number): Generator<number, void, unknown> {
   }
 }
 
-export function flipVertical(bb: number): number {
+export function flipVertical(bb: Bitboard): Bitboard {
   // https://www.chessprogramming.org/Flipping_Mirroring_and_Rotating#FlipVertically
   bb =
     ((bb >> 8) & 0x00ff_00ff_00ff_00ff) | ((bb & 0x00ff_00ff_00ff_00ff) << 8);
@@ -394,7 +400,7 @@ export function flipVertical(bb: number): number {
   return bb;
 }
 
-export function flip_horizontal(bb: number): number {
+export function flip_horizontal(bb: Bitboard): Bitboard {
   // https://www.chessprogramming.org/Flipping_Mirroring_and_Rotating#MirrorHorizontally
   bb =
     ((bb >> 1) & 0x5555_5555_5555_5555) | ((bb & 0x5555_5555_5555_5555) << 1);
@@ -405,7 +411,7 @@ export function flip_horizontal(bb: number): number {
   return bb;
 }
 
-export function flip_diagonal(bb: number): number {
+export function flip_diagonal(bb: Bitboard): Bitboard {
   // https://www.chessprogramming.org/Flipping_Mirroring_and_Rotating#FlipabouttheDiagonal
   let t = (bb ^ (bb << 28)) & 0x0f0f_0f0f_0000_0000;
   bb = bb ^ t ^ (t >> 28);
@@ -416,7 +422,7 @@ export function flip_diagonal(bb: number): number {
   return bb;
 }
 
-export function flip_anti_diagonal(bb: number): number {
+export function flip_anti_diagonal(bb: Bitboard): Bitboard {
   // https://www.chessprogramming.org/Flipping_Mirroring_and_Rotating#FlipabouttheAntidiagonal
   let t = bb ^ (bb << 36);
   bb = bb ^ ((t ^ (bb >> 36)) & 0xf0f0_f0f0_0f0f_0f0f);
@@ -427,58 +433,58 @@ export function flip_anti_diagonal(bb: number): number {
   return bb;
 }
 
-export function shift_down(bb: number): number {
+export function shift_down(bb: Bitboard): Bitboard {
   return bb >> 8;
 }
 
-export function shift_2_down(bb: number): number {
+export function shift_2_down(bb: Bitboard): Bitboard {
   return bb >> 16;
 }
 
-export function shift_up(bb: number): number {
+export function shift_up(bb: Bitboard): Bitboard {
   return (bb << 8) & BB_ALL;
 }
 
-export function shift_2_up(bb: number): number {
+export function shift_2_up(bb: Bitboard): Bitboard {
   return (bb << 16) & BB_ALL;
 }
 
-export function shift_right(bb: number): number {
+export function shift_right(bb: Bitboard): Bitboard {
   return (bb << 1) & ~BB_FILE_A & BB_ALL;
 }
 
-export function shift_2_right(bb: number): number {
+export function shift_2_right(bb: Bitboard): Bitboard {
   return (bb << 2) & ~BB_FILE_A & ~BB_FILE_B & BB_ALL;
 }
 
-export function shift_left(bb: number): number {
+export function shift_left(bb: Bitboard): Bitboard {
   return (bb >> 1) & ~BB_FILE_H;
 }
 
-export function shift_2_left(bb: number): number {
+export function shift_2_left(bb: Bitboard): Bitboard {
   return (bb >> 2) & ~BB_FILE_G & ~BB_FILE_H;
 }
 
-export function shift_up_left(bb: number): number {
+export function shift_up_left(bb: Bitboard): Bitboard {
   return (bb << 7) & ~BB_FILE_H & BB_ALL;
 }
 
-export function shift_up_right(bb: number): number {
+export function shift_up_right(bb: Bitboard): Bitboard {
   return (bb << 9) & ~BB_FILE_A & BB_ALL;
 }
 
-export function shift_down_left(bb: number): number {
+export function shift_down_left(bb: Bitboard): Bitboard {
   return (bb >> 9) & ~BB_FILE_H;
 }
-export function shift_down_right(bb: number): number {
+export function shift_down_right(bb: Bitboard): Bitboard {
   return (bb >> 7) & ~BB_FILE_A;
 }
 
 function slidingAttacks(
   square: SquareNumber,
-  occupied: number,
+  occupied: Bitboard,
   deltaList: Array<number>
-): number {
+): Bitboard {
   let attacks = BB_EMPTY;
 
   deltaList.forEach((delta) => {
@@ -497,7 +503,7 @@ function slidingAttacks(
   return attacks;
 }
 
-function stepAttacks(square: SquareNumber, deltaList: Array<number>): number {
+function stepAttacks(square: SquareNumber, deltaList: Array<number>): Bitboard {
   return slidingAttacks(square, BB_ALL, deltaList);
 }
 
@@ -512,14 +518,14 @@ export const BB_PAWN_ATTACKS = [
   [7, 9],
 ].map((deltaList) => SQUARES.map((square) => stepAttacks(square, deltaList)));
 
-function edges(square: SquareNumber): number {
+function edges(square: SquareNumber): Bitboard {
   return (
     ((BB_RANK_1 | BB_RANK_8) & ~BB_RANKS[Square.squareRank(square)]) |
     ((BB_FILE_A | BB_FILE_H) & ~BB_FILES[Square.squareFile(square)])
   );
 }
 
-function* carryRippler(mask: number): Generator<number> {
+function* carryRippler(mask: Bitboard): Generator<number> {
   // Carry-Rippler trick to iterate subsets of mask.
   let subset = BB_EMPTY;
   yield subset;
@@ -531,7 +537,7 @@ function* carryRippler(mask: number): Generator<number> {
 
 function attackTable(
   deltaList: Array<number>
-): [Array<number>, Array<Record<number, number>>] {
+): [Array<Bitboard>, Array<Record<Bitboard, Bitboard>>] {
   const maskTable: number[] = [];
   const attackTable: Record<number, number>[] = [];
 
@@ -551,7 +557,7 @@ export const [BB_DIAG_MASKS, BB_DIAG_ATTACKS] = attackTable([-9, -7, 7, 9]);
 export const [BB_FILE_MASKS, BB_FILE_ATTACKS] = attackTable([-8, 8]);
 export const [BB_RANK_MASKS, BB_RANK_ATTACKS] = attackTable([-1, 1]);
 
-function rayList(): number[][] {
+function rayList(): Bitboard[][] {
   let rayList: number[][] = [];
   BB_SQUARES.forEach((bb_square, index) => {
     let rayRowList: number[] = [];
@@ -577,16 +583,19 @@ function rayList(): number[][] {
 
 export const BB_RAYS = rayList();
 
-export function ray(square: SquareNumber, squareBAsInt: number): number {
-  return BB_RAYS[square][squareBAsInt];
+export function ray(squareA: SquareNumber, squareB: SquareNumber): Bitboard {
+  return BB_RAYS[squareA][squareB];
 }
 
-export function between(square: SquareNumber, squareBAsInt: number): number {
+export function between(
+  squareA: SquareNumber,
+  squareB: SquareNumber
+): Bitboard {
   const bb =
-    BB_RAYS[square][squareBAsInt] &
-    ((BB_ALL << square) ^ (BB_ALL << squareBAsInt));
+    BB_RAYS[squareA][squareB] & ((BB_ALL << squareA) ^ (BB_ALL << squareB));
   return bb & (bb - 1);
 }
+//TODO: propagate Bitboard & squareNumber types across old made methods.
 
 export const SAN_REGEX = new RegExp(
   "^([NBKRQ])?([a-h])?([1-8])?[-x]?([a-h][1-8])(=?[nbrqkNBRQK])?[+#]?Z"
@@ -1204,5 +1213,7 @@ export class AbstractChessBoard {
           BB_SQUARES[SQUARES_180[squareIndex - 1]];
     }
   }
-  //TODO: def piece_map(self, *, mask: Bitboard = BB_ALL) -> Dict[Square, Piece]:
+  // pieceMap(mask: number = BB_ALL): Record[SquareNumber, Piece]{
+
+  // }
 }
