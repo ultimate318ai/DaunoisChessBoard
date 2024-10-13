@@ -404,6 +404,10 @@ export function* scanReversed(
   }
 }
 
+export function bitCount(n: number) {
+  return Array.from(n.toString(2)).filter((binary) => !!+binary).length;
+}
+
 export function flipVertical(bb: Bitboard): Bitboard {
   // https://www.chessprogramming.org/Flipping_Mirroring_and_Rotating#FlipVertically
   bb =
@@ -809,40 +813,81 @@ export class AbstractChessBoard {
   get queens() {
     return this._state.queenListAsNumber;
   }
+
+  set queens(value: number) {
+    this._state.queenListAsNumber = value;
+  }
+
   get kings() {
     return this._state.kingListAsNumber;
+  }
+
+  set kings(value: number) {
+    this._state.kingListAsNumber = value;
   }
 
   get rooks() {
     return this._state.rookListAsNumber;
   }
 
+  set rooks(value: number) {
+    this._state.rookListAsNumber = value;
+  }
+
   get knights() {
     return this._state.knightListAsNumber;
+  }
+
+  set knights(value: number) {
+    this._state.knightListAsNumber = value;
   }
 
   get bishops() {
     return this._state.bishopListAsNumber;
   }
 
+  set bishops(value: number) {
+    this._state.bishopListAsNumber = value;
+  }
+
   get pawns() {
     return this._state.pawnListAsNumber;
+  }
+
+  set pawns(value: number) {
+    this._state.pawnListAsNumber = value;
   }
 
   get occupied() {
     return this._state.occupiedSquareListAsNumber;
   }
 
+  set occupied(value: number) {
+    this._state.occupiedSquareListAsNumber = value;
+  }
+
   get promoted() {
     return this._state.promotedListAsNumber;
+  }
+
+  set promoted(value: number) {
+    this._state.promotedListAsNumber = value;
   }
 
   get occupiedWhite() {
     return this._state.occupiedSquareListByColor.white;
   }
 
+  set occupiedWhite(value: number) {
+    this._state.occupiedSquareListByColor.white = value;
+  }
+
   get occupiedBlack() {
     return this._state.occupiedSquareListByColor.black;
+  }
+
+  set occupiedBlack(value: number) {
+    this._state.occupiedSquareListByColor.black = value;
   }
 
   occupiedByColorName(colorName: ColorName) {
@@ -1049,36 +1094,36 @@ export class AbstractChessBoard {
 
     switch (pieceType) {
       case PAWN:
-        this._state.pawnListAsNumber ^= mask;
+        this.pawns ^= mask;
         break;
       case KNIGHT:
-        this._state.knightListAsNumber ^= mask;
+        this.knights ^= mask;
         break;
       case BISHOP:
-        this._state.bishopListAsNumber ^= mask;
+        this.bishops ^= mask;
         break;
       case ROOK:
-        this._state.rookListAsNumber ^= mask;
+        this.rooks ^= mask;
         break;
       case QUEEN:
-        this._state.queenListAsNumber ^= mask;
+        this.queens ^= mask;
         break;
       case KING:
-        this._state.kingListAsNumber ^= mask;
+        this.kings ^= mask;
         break;
       default:
         return null;
     }
-    this._state.occupiedSquareListAsNumber ^= mask;
-    this._state.occupiedSquareListByColor.white &= ~mask;
-    this._state.occupiedSquareListByColor.black &= ~mask;
-    this._state.promotedListAsNumber &= ~mask;
+    this.occupied ^= mask;
+    this.occupiedWhite &= ~mask;
+    this.occupiedBlack &= ~mask;
+    this.promoted &= ~mask;
 
     return pieceType;
   }
   removePieceAt(square: SquareNumber): Piece | null {
     const color: ColorName = new Boolean(
-      this._state.occupiedSquareListByColor.white & BB_SQUARES[square]
+      this.occupiedWhite & BB_SQUARES[square]
     )
       ? "white"
       : "black";
@@ -1096,29 +1141,29 @@ export class AbstractChessBoard {
 
     switch (pieceType) {
       case PAWN:
-        this._state.pawnListAsNumber |= mask;
+        this.pawns |= mask;
         break;
       case KNIGHT:
-        this._state.knightListAsNumber |= mask;
+        this.knights |= mask;
         break;
       case BISHOP:
-        this._state.bishopListAsNumber |= mask;
+        this.bishops |= mask;
         break;
       case ROOK:
-        this._state.rookListAsNumber |= mask;
+        this.rooks |= mask;
         break;
       case QUEEN:
-        this._state.queenListAsNumber |= mask;
+        this.queens |= mask;
         break;
       case KING:
-        this._state.kingListAsNumber |= mask;
+        this.kings |= mask;
         break;
       default:
         return;
     }
-    this._state.occupiedSquareListAsNumber ^= mask;
+    this.occupied ^= mask;
     this._state.occupiedSquareListByColor[color] ^= mask;
-    if (promoted) this._state.promotedListAsNumber ^= mask;
+    if (promoted) this.promoted ^= mask;
   }
   setPieceAt(
     square: SquareNumber,
@@ -1142,7 +1187,7 @@ export class AbstractChessBoard {
           empty = 0;
         }
         builderList.push(piece.symbol);
-        if (promoted && BB_SQUARES[square] & this._state.promotedListAsNumber)
+        if (promoted && BB_SQUARES[square] & this.promoted)
           builderList.push("~");
       }
       if (BB_SQUARES[square] & BB_FILE_H) {
@@ -1223,14 +1268,11 @@ export class AbstractChessBoard {
         );
         squareIndex += 1;
       } else if (char === "~")
-        this._state.promotedListAsNumber |=
-          BB_SQUARES[SQUARES_180[squareIndex - 1]];
+        this.promoted |= BB_SQUARES[SQUARES_180[squareIndex - 1]];
     }
   }
   pieceMap(mask: number = BB_ALL): Dict<Piece> {
-    return Array.from(
-      scanReversed(this._state.occupiedSquareListAsNumber & mask)
-    )
+    return Array.from(scanReversed(this.occupied & mask))
       .map((square) => {
         return { square: square, piece: this.pieceAt(square) };
       })
@@ -1273,22 +1315,21 @@ export class AbstractChessBoard {
     });
     const bw_file = bw * 2 + 1;
     const bb_file = bb * 2;
-    this._state.bishopListAsNumber =
-      (BB_FILES[bw_file] | BB_FILES[bb_file]) & BB_BACKRANKS;
+    this.bishops = (BB_FILES[bw_file] | BB_FILES[bb_file]) & BB_BACKRANKS;
 
     let queens_file = q;
     queens_file += Number(Math.min(bw_file, bb_file) <= queens_file);
     queens_file += Number(Math.max(bw_file, bb_file) <= queens_file);
-    this._state.queenListAsNumber = BB_FILES[queens_file] & BB_BACKRANKS;
+    this.queens = BB_FILES[queens_file] & BB_BACKRANKS;
 
     const used = [bw_file, bb_file, queens_file];
 
-    this._state.kingListAsNumber = BB_EMPTY;
+    this.kings = BB_EMPTY;
 
     range(0, 8).forEach((i) => {
       if (used.find((n) => n === i) === undefined) {
         if (n1 == 0 || n2 == 0) {
-          this._state.knightListAsNumber |= BB_FILES[i] & BB_BACKRANKS;
+          this.knights |= BB_FILES[i] & BB_BACKRANKS;
           used.push(i);
         }
         n1 -= 1;
@@ -1298,32 +1339,118 @@ export class AbstractChessBoard {
 
     range(0, 8).forEach((i) => {
       if (used.find((n) => n === i) === undefined) {
-        this._state.rookListAsNumber = BB_FILES[i] & BB_BACKRANKS;
+        this.rooks = BB_FILES[i] & BB_BACKRANKS;
         used.push(i);
         return;
       }
     });
     range(1, 8).forEach((i) => {
       if (used.find((n) => n === i) === undefined) {
-        this._state.kingListAsNumber = BB_FILES[i] & BB_BACKRANKS;
+        this.kings = BB_FILES[i] & BB_BACKRANKS;
         used.push(i);
         return;
       }
     });
     range(2, 8).forEach((i) => {
       if (used.find((n) => n === i) === undefined) {
-        this._state.rookListAsNumber |= BB_FILES[i] & BB_BACKRANKS;
+        this.rooks |= BB_FILES[i] & BB_BACKRANKS;
         used.push(i);
         return;
       }
     });
 
-    this._state.pawnListAsNumber = BB_RANK_2 | BB_RANK_7;
-    this._state.occupiedSquareListByColor.white = BB_RANK_1 | BB_RANK_2;
-    this._state.occupiedSquareListByColor.black = BB_RANK_7 | BB_RANK_8;
-    this._state.occupiedSquareListAsNumber =
-      BB_RANK_1 | BB_RANK_2 | BB_RANK_7 | BB_RANK_8;
-    this._state.promotedListAsNumber = BB_EMPTY;
+    this.pawns = BB_RANK_2 | BB_RANK_7;
+    this.occupiedWhite = BB_RANK_1 | BB_RANK_2;
+    this.occupiedBlack = BB_RANK_7 | BB_RANK_8;
+    this.occupied = BB_RANK_1 | BB_RANK_2 | BB_RANK_7 | BB_RANK_8;
+    this.promoted = BB_EMPTY;
   }
-  //TODO: chess960_pos(self) -> Optional[int]:
+  chess96Pos(): number | null {
+    if (
+      this.occupiedWhite !== (BB_RANK_1 | BB_RANK_2) ||
+      this.occupiedBlack !== (BB_RANK_7 | BB_RANK_8) ||
+      this.pawns !== (BB_RANK_2 | BB_RANK_7) ||
+      this.promoted
+    ) {
+      return null;
+    }
+    const piecesCountList = [
+      this.bishops,
+      this.rooks,
+      this.knights,
+      this.queens,
+      this.kings,
+    ].map((pieceListAsNumber) => bitCount(pieceListAsNumber));
+
+    const expectedPiecesCountList = [4, 4, 4, 2, 2];
+
+    const invalidPieceCountList = zip(
+      piecesCountList,
+      expectedPiecesCountList
+    ).filter(
+      ([currentPieceCount, expectedPieceCount]) =>
+        currentPieceCount !== expectedPieceCount
+    );
+    if (invalidPieceCountList.length > 0) return null;
+
+    const piecesSymmetryCheck = [
+      this.bishops,
+      this.rooks,
+      this.knights,
+      this.queens,
+      this.kings,
+    ].some(
+      (pieceListAsNumber) =>
+        (BB_RANK_1 & pieceListAsNumber) << 56 !==
+        (BB_RANK_8 & pieceListAsNumber)
+    );
+
+    if (piecesSymmetryCheck) return null;
+
+    // Algorithm from ChessX, src/database/bitboard.cpp, r2254.
+    let x = this.bishops & (2 + 8 + 32 + 128);
+    if (!x) return null;
+    let bs1 = (lsb(x) - 1) / 2;
+    let cc_pos = bs1;
+    x = this.bishops & (1 + 4 + 16 + 64);
+    if (!x) return null;
+    let bs2 = lsb(x) * 2;
+    cc_pos += bs2;
+
+    let q = 0;
+    let qf = false;
+    let n0 = 0;
+    let n1 = 0;
+    let n0f = false;
+    let n1f = false;
+    let rf = 0;
+    let n0s = [0, 4, 7, 9];
+    for (const square of range(A1, H1 + 1)) {
+      let bb = BB_SQUARES[square];
+      if (bb & this.queens) qf = true;
+      else if (bb & this.rooks || bb & this.kings) {
+        if (bb & this.kings) {
+          if (rf != 1) return null;
+        } else rf += 1;
+
+        if (!qf) q += 1;
+
+        if (!n0f) n0 += 1;
+        else if (!n1f) n1 += 1;
+      } else if (bb & this.knights) {
+        if (!qf) q += 1;
+
+        if (!n0f) n0f = true;
+        else if (!n1f) n1f = true;
+      }
+    }
+
+    if (n0 < 4 && n1f && qf) {
+      cc_pos += q * 16;
+      const krn = n0s[n0] + n1;
+      cc_pos += krn * 96;
+      return cc_pos;
+    } else return null;
+  }
+  // TODO: def __repr__(self) -> str:
 }
